@@ -28,6 +28,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     static final float GROUND = 972f;   // humanoids walk here
     static final float W = 9600f;       // world width (wraps round)
     static final int HUMANS = 10;
+    static final float SZ = 1.4f;       // ship/enemy drawing scale
 
     static final int TITLE = 0, PLAYING = 1, WAVE_END = 2, GAME_OVER = 3;
     static final int LANDER = 0, MUTANT = 1, BOMBER = 2, POD = 3, SWARMER = 4, BAITER = 5;
@@ -86,9 +87,10 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     // ---- input (written on UI thread, read on game thread) ----
     private volatile int stickId = -1;
     private volatile float stickAx, stickAy, stickX, stickY;
-    private volatile boolean fireHeld, bombHeld, hyperHeld, tapped;
-    private boolean prevBomb, prevHyper;
-    private float fireX, fireY, fireR, bombX, bombY, hypX, hypY, smallR;
+    private volatile boolean fireHeld, bombHeld, hyperHeld, revHeld, tapped;
+    private boolean prevBomb, prevHyper, prevRev;
+    private int lastStickDir;
+    private float fireX, fireY, fireR, bombX, bombY, hypX, hypY, revX, revY, smallR;
 
     // ---- game state ----
     int state = TITLE;
@@ -162,6 +164,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         smallR = 62;
         bombX = VW - 330; bombY = VH - 95;
         hypX = VW - 135; hypY = VH - 345;
+        revX = VW - 335; revY = VH - 290;
     }
 
     @Override public void surfaceDestroyed(SurfaceHolder h) { surfaceReady = false; }
@@ -216,7 +219,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 || action == MotionEvent.ACTION_CANCEL) {
             if (action == MotionEvent.ACTION_CANCEL || e.getPointerId(idx) == stickId) stickId = -1;
         }
-        boolean f = false, b = false, hy = false;
+        boolean f = false, b = false, hy = false, rv = false;
         for (int i = 0; i < e.getPointerCount(); i++) {
             if ((action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) && i == idx) continue;
             if (action == MotionEvent.ACTION_CANCEL) continue;
@@ -230,11 +233,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             if (near(x, y, fireX, fireY, fireR * 1.35f)) f = true;
             else if (near(x, y, bombX, bombY, smallR * 1.3f)) b = true;
             else if (near(x, y, hypX, hypY, smallR * 1.3f)) hy = true;
+            else if (near(x, y, revX, revY, smallR * 1.4f)) rv = true;
             else if (x >= VW * 0.42f) f = true;   // anywhere else on the right fires
         }
         fireHeld = f;
         bombHeld = b;
         hyperHeld = hy;
+        revHeld = rv;
         return true;
     }
 
@@ -527,11 +532,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             boolean stick = stickId >= 0;
             float sdx = stick ? stickX - stickAx : 0, sdy = stick ? stickY - stickAy : 0;
             py += clamp(sdy / 70f, -1, 1) * 600 * dt;
-            py = clamp(py, PT + 25, GROUND - 18);
+            py = clamp(py, PT + 30, GROUND - 24);
             thrusting = false;
-            if (Math.abs(sdx) > 28) {
-                int dir = sdx > 0 ? 1 : -1;
-                if (dir != facing) facing = dir;
+            if (revHeld && !prevRev) facing = -facing;
+            int stickDir = Math.abs(sdx) > 28 ? (sdx > 0 ? 1 : -1) : 0;
+            if (stickDir != 0 && stickDir != lastStickDir) facing = stickDir;
+            lastStickDir = stickDir;
+            if (stickDir != 0) {
                 float amt = clamp((Math.abs(sdx) - 28) / 70f, 0, 1);
                 pvx += facing * amt * 1800 * dt;
                 thrusting = amt > 0.05f;
@@ -545,7 +552,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             fireCool -= dt;
             if (fireHeld && fireCool <= 0 && lasers.size() < 5) {
                 Laser l = new Laser();
-                l.x0 = wrap(px + facing * 36);
+                l.x0 = wrap(px + facing * 52);
                 l.y = py + 4;
                 l.dir = facing;
                 l.life = 0.55f;
@@ -574,7 +581,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 camOff = facing * VW * 0.25f;
                 camC = wrap(px + camOff);
                 oldCam = camC;
-                if (carried != null) { carried.x = px; carried.y = py + 28; }
+                if (carried != null) { carried.x = px; carried.y = py + 40; }
                 if (rnd.nextInt(8) == 0 && invuln <= 0) killPlayer();
             }
         } else {
@@ -595,6 +602,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         }
         prevBomb = bombHeld;
         prevHyper = hyperHeld;
+        prevRev = revHeld;
 
         // ---- camera ----
         float target = facing * VW * 0.25f;
@@ -700,7 +708,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                     break;
                 }
             }
-            e.y = clamp(e.y, PT + 12, GROUND - 10);
+            e.y = clamp(e.y, PT + 18, GROUND - 16);
 
             // shooting
             if (e.type != BOMBER && e.type != POD) {
@@ -732,7 +740,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
 
             // collide with player
             if (alive && state == PLAYING && invuln <= 0
-                    && Math.abs(dxw(e.x, px)) < 36 && Math.abs(e.y - py) < 26) {
+                    && Math.abs(dxw(e.x, px)) < 50 && Math.abs(e.y - py) < 34) {
                 killEnemy(e, false);
                 killPlayer();
             }
@@ -777,7 +785,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 if (tg == null || tg.dead || tg.state != H_WALK) { e.state = 0; break; }
                 e.x = tg.x;
                 e.y += 95 * m * dt;
-                if (e.y >= tg.y - 34) {
+                if (e.y >= tg.y - 46) {
                     tg.state = H_CARRIED;
                     e.carry = tg;
                     e.state = 2;
@@ -790,7 +798,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 if (h == null) { e.state = 0; break; }
                 e.y -= 52 * m * Math.min(1, dt);
                 h.x = e.x;
-                h.y = e.y + 34;
+                h.y = e.y + 46;
                 if (e.y <= PT + 14) {
                     h.dead = true;
                     h.claim = null;
@@ -826,7 +834,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 case H_FALLING:
                     h.vy = Math.min(h.vy + 170 * dt, 230);
                     h.y += h.vy * dt;
-                    if (alive && Math.abs(dxw(h.x, px)) < 40 && Math.abs(h.y - py) < 34) {
+                    if (alive && Math.abs(dxw(h.x, px)) < 52 && Math.abs(h.y - py) < 44) {
                         h.state = H_RESCUED;
                         carried = h;
                         addScore(500);
@@ -848,8 +856,8 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
                 case H_RESCUED:
                     if (carried != h) { h.state = H_FALLING; h.fallFrom = h.y; break; }
                     h.x = px;
-                    h.y = py + 28;
-                    if (py >= GROUND - 50) {
+                    h.y = py + 40;
+                    if (py >= GROUND - 64) {
                         h.state = H_WALK;
                         h.y = GROUND;
                         carried = null;
@@ -870,7 +878,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             if (l.life <= 0 || l.tail >= l.head || l.head > VW * 1.2f) { l.dead = true; continue; }
             for (Enemy e : enemies) {
                 if (e.dead) continue;
-                if (Math.abs(e.y - l.y) > 24) continue;
+                if (Math.abs(e.y - l.y) > 32) continue;
                 float d = dxw(e.x, l.x0) * l.dir;
                 if (d >= l.tail - 10 && d <= l.head + 10) {
                     killEnemy(e, false);
@@ -888,7 +896,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             b.life -= dt;
             b.x = wrap(b.x + b.vx * dt);
             b.y += b.vy * dt;
-            boolean hit = alive && invuln <= 0 && Math.abs(dxw(b.x, px)) < 28 && Math.abs(b.y - py) < 16;
+            boolean hit = alive && invuln <= 0 && Math.abs(dxw(b.x, px)) < 40 && Math.abs(b.y - py) < 20;
             if (hit) killPlayer();
             if (hit || b.life <= 0 || b.y < PT || b.y > VH) {
                 if (i < bullets.size()) bullets.remove(i);
@@ -1015,6 +1023,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
     void drawShip(Canvas c, float x, float y, int f, boolean flame) {
+        c.save();
+        c.scale(SZ, SZ, x, y);
+        drawShip0(c, x, y, f, flame);
+        c.restore();
+    }
+
+    void drawShip0(Canvas c, float x, float y, int f, boolean flame) {
         if (flame) {
             fill(rnd.nextBoolean() ? 0xFFFF8800 : 0xFFFFDD00);
             path.reset();
@@ -1043,7 +1058,14 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
 
     void drawEnemy(Canvas c, Enemy e) {
         float x = sx(e.x), y = e.y;
-        if (x < -60 || x > VW + 60) return;
+        if (x < -80 || x > VW + 80) return;
+        c.save();
+        c.scale(SZ, SZ, x, y);
+        drawEnemy0(c, e, x, y);
+        c.restore();
+    }
+
+    void drawEnemy0(Canvas c, Enemy e, float x, float y) {
         switch (e.type) {
             case LANDER:
                 stroke(0xFFFFDD33, 3);
@@ -1114,6 +1136,13 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
     void drawHuman(Canvas c, Human h) {
         float x = sx(h.x), y = h.y;
         if (x < -20 || x > VW + 20) return;
+        c.save();
+        c.scale(1.25f, 1.25f, x, y);
+        drawHuman0(c, h, x, y);
+        c.restore();
+    }
+
+    void drawHuman0(Canvas c, Human h, float x, float y) {
         int col = h.state == H_FALLING ? (((int) (h.y / 20)) % 2 == 0 ? 0xFFFFFFFF : 0xFFCC88FF) : 0xFFCC88FF;
         fill(col);
         c.drawCircle(x, y - 22, 5, paint);
@@ -1250,6 +1279,9 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         fill(hyperHeld ? 0x8833AAFF : 0x4433AAFF);
         c.drawCircle(hypX, hypY, smallR, paint);
         text(c, "HYPER", hypX, hypY + 10, 26, 0xAAFFFFFF, Paint.Align.CENTER);
+        fill(revHeld ? 0x8833FF88 : 0x4433FF88);
+        c.drawCircle(revX, revY, smallR, paint);
+        text(c, "REV", revX, revY + 10, 30, 0xAAFFFFFF, Paint.Align.CENTER);
     }
 
     void drawTitle(Canvas c) {
@@ -1257,7 +1289,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         text(c, "Stop the landers carrying off your humanoids", VW / 2, 390, 38, 0xFFCC88FF, Paint.Align.CENTER);
         int y = 480;
         text(c, "LEFT THUMB  drag anywhere to fly - push left/right to thrust and turn", VW / 2, y, 30, 0xFFDDDDDD, Paint.Align.CENTER);
-        text(c, "RIGHT THUMB  FIRE (hold for rapid)   BOMB clears the screen   HYPER warps you", VW / 2, y + 46, 30, 0xFFDDDDDD, Paint.Align.CENTER);
+        text(c, "RIGHT THUMB  FIRE (hold)   REV turns round   BOMB clears screen   HYPER warps", VW / 2, y + 46, 30, 0xFFDDDDDD, Paint.Align.CENTER);
         text(c, "Shoot a lander carrying a humanoid, then catch it and fly it back down", VW / 2, y + 92, 30, 0xFFDDDDDD, Paint.Align.CENTER);
         text(c, "Bonus ship and bomb every 10,000", VW / 2, y + 138, 30, 0xFFDDDDDD, Paint.Align.CENTER);
 
@@ -1270,7 +1302,7 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             demo.x = wrap(camC - VW / 2 + ix + i * 132);
             demo.y = 720;
             drawEnemy(c, demo);
-            text(c, String.valueOf(POINTS[types[i]]), ix + i * 132, 775, 26, COL[types[i]], Paint.Align.CENTER);
+            text(c, String.valueOf(POINTS[types[i]]), ix + i * 132, 790, 26, COL[types[i]], Paint.Align.CENTER);
         }
         if (((System.nanoTime() / 500_000_000L) % 2) == 0)
             text(c, "TAP TO START", VW / 2, 870, 56, 0xFFFFFF33, Paint.Align.CENTER);
