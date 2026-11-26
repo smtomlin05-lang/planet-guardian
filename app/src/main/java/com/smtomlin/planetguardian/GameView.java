@@ -233,7 +233,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             if (near(x, y, fireX, fireY, fireR * 1.35f)) f = true;
             else if (near(x, y, bombX, bombY, smallR * 1.3f)) b = true;
             else if (near(x, y, hypX, hypY, smallR * 1.3f)) hy = true;
-            else if (near(x, y, revX, revY, smallR * 1.4f)) rv = true;
             else if (x >= VW * 0.42f) f = true;   // anywhere else on the right fires
         }
         fireHeld = f;
@@ -534,7 +533,6 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
             py += clamp(sdy / 70f, -1, 1) * 600 * dt;
             py = clamp(py, PT + 30, GROUND - 24);
             thrusting = false;
-            if (revHeld && !prevRev) facing = -facing;
             int stickDir = Math.abs(sdx) > 28 ? (sdx > 0 ? 1 : -1) : 0;
             if (stickDir != 0 && stickDir != lastStickDir) facing = stickDir;
             lastStickDir = stickDir;
@@ -1279,17 +1277,14 @@ public class GameView extends SurfaceView implements SurfaceHolder.Callback, Run
         fill(hyperHeld ? 0x8833AAFF : 0x4433AAFF);
         c.drawCircle(hypX, hypY, smallR, paint);
         text(c, "HYPER", hypX, hypY + 10, 26, 0xAAFFFFFF, Paint.Align.CENTER);
-        fill(revHeld ? 0x8833FF88 : 0x4433FF88);
-        c.drawCircle(revX, revY, smallR, paint);
-        text(c, "REV", revX, revY + 10, 30, 0xAAFFFFFF, Paint.Align.CENTER);
     }
 
     void drawTitle(Canvas c) {
         text(c, "PLANET GUARDIAN", VW / 2, 300, 110, 0xFFFF3399, Paint.Align.CENTER);
         text(c, "Stop the landers carrying off your humanoids", VW / 2, 390, 38, 0xFFCC88FF, Paint.Align.CENTER);
         int y = 480;
-        text(c, "LEFT THUMB  drag anywhere to fly - push left/right to thrust and turn", VW / 2, y, 30, 0xFFDDDDDD, Paint.Align.CENTER);
-        text(c, "RIGHT THUMB  FIRE (hold)   REV turns round   BOMB clears screen   HYPER warps", VW / 2, y + 46, 30, 0xFFDDDDDD, Paint.Align.CENTER);
+        text(c, "LEFT THUMB  drag to fly - slide the other way to turn round", VW / 2, y, 30, 0xFFDDDDDD, Paint.Align.CENTER);
+        text(c, "RIGHT THUMB  FIRE (hold for rapid)   BOMB clears the screen   HYPER warps you", VW / 2, y + 46, 30, 0xFFDDDDDD, Paint.Align.CENTER);
         text(c, "Shoot a lander carrying a humanoid, then catch it and fly it back down", VW / 2, y + 92, 30, 0xFFDDDDDD, Paint.Align.CENTER);
         text(c, "Bonus ship and bomb every 10,000", VW / 2, y + 138, 30, 0xFFDDDDDD, Paint.Align.CENTER);
 
