@@ -1,0 +1,35 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.smtomlin.planetguardian'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.smtomlin.planetguardian'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        // fixed key kept in the repo so every build installs over the last one
+        debug {
+            storeFile file('planetguardian.keystore')
+            storePassword 'planetguardian'
+            keyAlias 'planetguardian'
+            keyPassword 'planetguardian'
+        }
+    }
+
+    buildTypes {
+        debug { signingConfig signingConfigs.debug }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
